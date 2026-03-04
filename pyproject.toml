@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xpolicylab"
+version = "0.0.1"
+
+[tool.setuptools]
+py-modules = ["XPolicyLab"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["*"]
+exclude = ["__pycache__*"]

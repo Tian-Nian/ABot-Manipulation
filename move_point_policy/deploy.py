@@ -1,7 +1,7 @@
 def get_model(deploy_cfg):
     # import packages and module here
-    from policy_lab.move_point_policy.your_policy import Your_Policy
-    # Initialize and return your policy_lab model here according to deploy_cfg
+    from XPolicyLab.move_point_policy.your_policy import Your_Policy
+    # Initialize and return your XPolicyLab model here according to deploy_cfg
     model = Your_Policy(deploy_cfg)
     return model
 

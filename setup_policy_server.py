@@ -18,7 +18,7 @@ def main(deploy_cfg):
     port = deploy_cfg.get("port")
 
     # Instantiate model
-    get_model = eval_function_decorator(f"policy_lab.{policy_name}", "get_model")
+    get_model = eval_function_decorator(f"XPolicyLab.{policy_name}", "get_model")
     model = get_model(deploy_cfg)
 
     # Start server in background thread
@@ -38,7 +38,6 @@ def main(deploy_cfg):
 def parse_args_and_config():
     """Parse CLI args and YAML config, merge overrides"""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, help="Port for ModelServer (optional)")
     parser.add_argument("--config_path", type=str, required=True, help="Path to config YAML")
     parser.add_argument("--overrides", nargs=argparse.REMAINDER, help="Override config values")
     args = parser.parse_args()
@@ -46,9 +45,7 @@ def parse_args_and_config():
     # Load base config
     with open(args.config_path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
-
-    cfg["port"] = args.port
-
+    
     # Parse overrides: --key value pairs
 
     def _parse_val(s: str):
@@ -57,7 +54,7 @@ def parse_args_and_config():
             return ast.literal_eval(s)
         except Exception:
             return s
-
+        
     if args.overrides:
         tokens = args.overrides
 
@@ -75,6 +72,8 @@ def parse_args_and_config():
             for key in it:
                 val = next(it)
                 cfg[key.lstrip("-")] = _parse_val(val)
+    
+    assert "port" in cfg.keys(), "Port number must be specified in config or overrides"
     return cfg
 
 if __name__ == "__main__":
