@@ -58,7 +58,7 @@ class Model(ModelTemplate):
         self.runner.reset_obs()
 
     def get_action(self):
-        action = self.runner.get_action(self.policy)
+        action = self.runner.get_action(self.model)
         if self.action_type == 'joint': # TODO
             action_dict = { 
                 "left_arm_joint_state": action[0:7],

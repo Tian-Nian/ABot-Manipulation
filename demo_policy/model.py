@@ -34,7 +34,7 @@ class Model(ModelTemplate):
                 "right_ee_pose": np.array([0] * 7),
                 "right_ee_joint_state": np.array([0] * 1),
             }
-        print("[Model] Generated action:", action_dict)
+        print("[Model] Generated action")
         return action_dict
 
     def reset(self):
