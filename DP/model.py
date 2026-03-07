@@ -1,4 +1,5 @@
 import torch
+import yaml
 import cv2
 import numpy as np
 import hydra
@@ -11,13 +12,44 @@ sys.path.append(parent_dir)
 
 from diffusion_policy.workspace.robotworkspace import RobotWorkspace
 from diffusion_policy.env_runner.dp_runner import DPRunner
+from XPolicyLab.model_template import ModelTemplate
 
-class DP:
+class Model(ModelTemplate):
 
-    def __init__(self, ckpt_file: str, n_obs_steps, n_action_steps, action_type):
-        self.policy = self.get_policy(ckpt_file, None, "cuda:0")
+    def __init__(self, model_cfg):
+        action_dim = model_cfg['action_dim']
+        load_config_path = os.path.join(parent_dir, f'diffusion_policy/config/robot_dp_{action_dim}.yaml')
+        with open(load_config_path, "r", encoding="utf-8") as f:
+            model_training_config = yaml.safe_load(f)
+        
+        n_obs_steps = model_training_config['n_obs_steps']
+        n_action_steps = model_training_config['n_action_steps']
+        self.action_type = model_cfg['action_type']
+
         self.runner = DPRunner(n_obs_steps=n_obs_steps, n_action_steps=n_action_steps)
-        self.action_type = action_type
+        self.model = self.get_model(model_cfg=model_cfg)
+
+    def get_model(self, model_cfg):
+        ckpt_file = os.path.join(parent_dir, f"checkpoints/{model_cfg['task_name']}-{model_cfg['env_cfg']}-{model_cfg['expert_data_num']}-{model_cfg['action_type']}-{model_cfg['seed']}/{model_cfg['checkpoint_num']}.ckpt")
+
+        # load checkpoint and workspace
+        payload = torch.load(open(ckpt_file, "rb"), pickle_module=dill)
+        cfg = payload["cfg"]
+        cls = hydra.utils.get_class(cfg._target_)
+        workspace = cls(cfg, output_dir=None)
+        workspace: RobotWorkspace
+        workspace.load_payload(payload, exclude_keys=None, include_keys=None)
+
+        # get policy from workspace
+        policy = workspace.model
+        if cfg.training.use_ema:
+            policy = workspace.ema_model
+
+        device = torch.device("cuda:0")
+        policy.to(device)
+        policy.eval()
+        
+        return policy
 
     def update_obs(self, observation):
         self.runner.update_obs(encode_obs(observation, self.action_type))
@@ -31,26 +63,6 @@ class DP:
 
     def get_last_obs(self):
         return self.runner.obs[-1]
-
-    def get_policy(self, checkpoint, output_dir, device):
-        # load checkpoint and workspace
-        payload = torch.load(open(checkpoint, "rb"), pickle_module=dill)
-        cfg = payload["cfg"]
-        cls = hydra.utils.get_class(cfg._target_)
-        workspace = cls(cfg, output_dir=output_dir)
-        workspace: RobotWorkspace
-        workspace.load_payload(payload, exclude_keys=None, include_keys=None)
-
-        # get policy from workspace
-        policy = workspace.model
-        if cfg.training.use_ema:
-            policy = workspace.ema_model
-
-        device = torch.device(device)
-        policy.to(device)
-        policy.eval()
-
-        return policy
 
 def encode_obs(observation, action_type):
     head_img = (np.moveaxis(observation["vision"]["cam_head"]["color"], -1, 0) / 255)
@@ -67,12 +79,12 @@ def encode_obs(observation, action_type):
         if "joint_states" in observation['state'].keys(): # single arm
             obs["agent_pos"] = np.concatenate([observation["state"]["joint_state"], observation["state"]["ee_joint_state"]], axis=-1)
         else:
-            assert "left_arm_joint_states" in observation['state'].keys() and "right_arm_joint_states" in observation['state'].keys(), "Expected joint states for both arms in the observationset."
-            left_arm_joint_states = observation['state']["left_arm_joint_states"]
-            right_arm_joint_states = observation['state']["right_arm_joint_states"]
-            left_ee_joint_states = observation['state']["left_ee_joint_states"]
-            right_ee_joint_states = observation['state']["right_ee_joint_states"]
-            obs["agent_pos"] = np.concatenate([left_arm_joint_states, left_ee_joint_states, right_arm_joint_states, right_ee_joint_states], axis=-1)
+            assert "left_arm_joint_state" in observation['state'].keys() and "right_arm_joint_state" in observation['state'].keys(), "Expected joint states for both arms in the observationset."
+            left_arm_joint_state = observation['state']["left_arm_joint_state"]
+            right_arm_joint_state = observation['state']["right_arm_joint_state"]
+            left_ee_joint_state = observation['state']["left_ee_joint_state"]
+            right_ee_joint_state = observation['state']["right_ee_joint_state"]
+            obs["agent_pos"] = np.concatenate([left_arm_joint_state, left_ee_joint_state, right_arm_joint_state, right_ee_joint_state], axis=-1)
     elif action_type == 'ee':
         if "ee_pose" in observation['state'].keys(): # dual arm
             ee_pose = observation['state']["ee_pose"]

@@ -6,10 +6,10 @@ import importlib
 import argparse
 from client_server.model_server import ModelServer
 
-def eval_function_decorator(policy_name, model_name):
+def eval_function_decorator(policy_model_name, Func_and_Class_name):
     """Load a specified function (e.g., get_model) from a policy module"""
-    module = importlib.import_module(policy_name)
-    return getattr(module, model_name)
+    module = importlib.import_module(policy_model_name)
+    return getattr(module, Func_and_Class_name)
 
 def main(deploy_cfg):
     """Main entry: load model, start server, run indefinitely"""
@@ -18,8 +18,8 @@ def main(deploy_cfg):
     port = deploy_cfg.get("port")
 
     # Instantiate model
-    get_model = eval_function_decorator(f"XPolicyLab.{policy_name}", "get_model")
-    model = get_model(deploy_cfg)
+    model_class_func = eval_function_decorator(f"XPolicyLab.{policy_name}.model", "Model")
+    model = model_class_func(deploy_cfg)
 
     # Start server in background thread
     server = ModelServer(model, port=port)

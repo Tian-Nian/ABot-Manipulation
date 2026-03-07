@@ -37,7 +37,6 @@ class DPRunner:
         self.tqdm_interval_sec = tqdm_interval_sec
 
         self.obs = deque(maxlen=n_obs_steps + 1)
-        self.env = None
 
     def stack_last_n_obs(self, all_obs, n_steps):
         assert len(all_obs) > 0
@@ -76,7 +75,7 @@ class DPRunner:
         return result
 
     def get_action(self, policy: BaseImagePolicy):
-        device, dtype = policy.device, policy.dtype
+        device = policy.device
         obs = self.get_n_steps_obs()
 
         # create obs dict

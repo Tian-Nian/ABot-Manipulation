@@ -1,10 +1,3 @@
-def get_model(deploy_cfg):
-    # import packages and module here
-    from .model import Demo_Policy
-    # Initialize and return your model here according to deploy_cfg
-    model = Demo_Policy(deploy_cfg)
-    return model
-
 def eval_one_episode(TASK_ENV, model_client):
     instruction = TASK_ENV.get_instruction()
     model_client.call(func_name="set_language", obs=instruction)

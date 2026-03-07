@@ -1,9 +1,10 @@
 import numpy as np
+from XPolicyLab.model_template import ModelTemplate
 
-class Demo_Policy:
-    def __init__(self, deploy_cfg):
-        self.deploy_cfg = deploy_cfg
-        # Initialize your policy model here according to deploy_cfg
+class Model(ModelTemplate):
+    def __init__(self, model_cfg):
+        self.model_cfg = model_cfg
+        # Initialize your policy model here according to model_cfg
     
     def set_language(self, instruction):
         # Process the instruction if needed
