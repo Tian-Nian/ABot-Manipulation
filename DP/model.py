@@ -59,7 +59,21 @@ class Model(ModelTemplate):
 
     def get_action(self):
         action = self.runner.get_action(self.policy)
-        return action
+        if self.action_type == 'joint': # TODO
+            action_dict = { 
+                "left_arm_joint_state": action[0:7],
+                "left_ee_joint_state": action[7:8],
+                "right_arm_joint_state": action[8:13],
+                "right_ee_joint_state": action[13:14]
+            }
+        elif self.action_type == 'ee':
+            action_dict = {
+                "left_ee_pose": action[0:7],
+                "left_ee_joint_state": action[7:8],
+                "right_ee_pose": action[8:13],
+                "right_ee_joint_state": action[13:14]
+            }
+        return action_dict
 
     def get_last_obs(self):
         return self.runner.obs[-1]

@@ -5,7 +5,7 @@ set -e  # 出错即退出
 policy_name=demo_policy
 task_name=${1}
 env_cfg=${2}
-ckpt_setting=${3}
+action_type=${3}
 gpu_id=${4}
 seed=${5}
 policy_conda_env=${6} # Conda
@@ -42,7 +42,7 @@ python XPolicyLab/setup_policy_server.py \
     port="${FREE_PORT}" \
     task_name="${task_name}" \
     env_cfg="${env_cfg}" \
-    ckpt_setting="${ckpt_setting}" \
+    action_type="${action_type}" \
     seed="${seed}" \
     policy_name="${policy_name}" \
   &
