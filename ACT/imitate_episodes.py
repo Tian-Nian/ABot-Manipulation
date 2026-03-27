@@ -19,7 +19,7 @@ from einops import rearrange
 
 from utils import load_data  # data functions
 from utils import compute_dict_mean, set_seed, detach_dict  # helper functions
-from act_policy import ACTPolicy, CNNMLPPolicy
+from .detr.act_policy import ACTPolicy, CNNMLPPolicy
 
 import IPython
 

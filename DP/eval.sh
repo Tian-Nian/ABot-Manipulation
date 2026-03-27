@@ -49,6 +49,5 @@ python "${ROOT_DIR}/XPolicyLab/setup_policy_server.py" \
 SERVER_PID=$!
 echo -e "\033[32m[SERVER] PID=${SERVER_PID} (running in background)\033[0m"
 
-bash "${UTILS_DIR}/wait_for_port.sh" "127.0.0.1" "${FREE_PORT}"
 bash "${UTILS_DIR}/run_policy_client.sh" "${sim_conda_env}" "${FREE_PORT}" "${task_name}" "${env_cfg}" "${policy_name}" "${ROOT_DIR}"
 echo -e "\033[33m[MAIN] eval_policy_client has finished; cleaning up server.\033[0m"

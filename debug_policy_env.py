@@ -124,7 +124,7 @@ class TestEnv:
             
         eval_module.eval_one_episode(TASK_ENV=self, model_client=self.model_client)
 
-    def eval_one_episode_bnatch(self):
+    def eval_one_episode_batch(self):
         policy_name = self.deploy_cfg['policy_name']
         try:
             eval_module = __import__(f'XPolicyLab.{policy_name}.deploy', fromlist=['eval_one_episode_batch'])

@@ -16,13 +16,9 @@ run_dir="data/outputs/${exp_name}_seed${seed}"
 echo -e "\033[33mgpu id (to use): ${gpu_id}\033[0m"
 
 # Get Action Dimension from env_cfg
-action_dim=$(python3 -c '
-import sys, os, json, yaml
-env_cfg = yaml.safe_load(open(os.path.join("../../env_cfg", f"{sys.argv[1]}.yml"), "r", encoding="utf-8"))
-robot_name = env_cfg["config"]["robot"]
-robot_action_dim_info = json.load(open(os.path.join("../../env_cfg/robot", "_robot_info.json"), "r", encoding="utf-8"))[robot_name]
-print(sum(robot_action_dim_info["arm_dim"]) + sum(robot_action_dim_info["ee_dim"]))
-' "$env_cfg")
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+UTILS_DIR="${ROOT_DIR}/XPolicyLab/utils"
+action_dim=$(bash "${UTILS_DIR}/get_action_dim.sh" "${ROOT_DIR}" "${env_cfg}"); echo -e "\033[33m[INFO] Action dim: ${action_dim}\033[0m"
 
 alg_name=robot_dp
 
