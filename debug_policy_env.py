@@ -113,9 +113,9 @@ class TestEnv:
     def eval_one_episode(self):
         policy_name = self.deploy_cfg['policy_name']
         try:
-            eval_module = __import__(f'XPolicyLab.{policy_name}.deploy', fromlist=['eval_one_episode'])
+            eval_module = __import__(f'XPolicyLab.policy.{policy_name}.deploy', fromlist=['eval_one_episode'])
         except ImportError as e:
-            print("[TestEnv]", f"Failed to import policy module: XPolicyLab.{policy_name}.deploy. Error: {e}", "ERROR")
+            print("[TestEnv]", f"Failed to import policy module: XPolicyLab.policy.{policy_name}.deploy. Error: {e}", "ERROR")
             raise e
             
         if not hasattr(eval_module, 'eval_one_episode'):
@@ -127,9 +127,9 @@ class TestEnv:
     def eval_one_episode_batch(self):
         policy_name = self.deploy_cfg['policy_name']
         try:
-            eval_module = __import__(f'XPolicyLab.{policy_name}.deploy', fromlist=['eval_one_episode_batch'])
+            eval_module = __import__(f'XPolicyLab.policy.{policy_name}.deploy', fromlist=['eval_one_episode_batch'])
         except ImportError as e:
-            print("[TestEnv]", f"Failed to import policy module: XPolicyLab.{policy_name}.deploy. Error: {e}", "ERROR")
+            print("[TestEnv]", f"Failed to import policy module: XPolicyLab.policy.{policy_name}.deploy. Error: {e}", "ERROR")
             raise e
             
         if not hasattr(eval_module, 'eval_one_episode_batch'):

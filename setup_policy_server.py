@@ -18,7 +18,7 @@ def main(deploy_cfg):
     port = deploy_cfg.get("port")
 
     # Instantiate model
-    model_class_func = eval_function_decorator(f"XPolicyLab.{policy_name}.model", "Model")
+    model_class_func = eval_function_decorator(f"XPolicyLab.policy.{policy_name}.model", "Model")
     model = model_class_func(deploy_cfg)
 
     # Start server in background thread

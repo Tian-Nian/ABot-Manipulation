@@ -15,9 +15,9 @@ sim_conda_env="${8}"
 export CUDA_VISIBLE_DEVICES="${gpu_id}"
 echo -e "\033[33m[INFO] GPU ID (to use): ${gpu_id}\033[0m"
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 UTILS_DIR="${ROOT_DIR}/XPolicyLab/utils"
-yaml_file="${ROOT_DIR}/XPolicyLab/${policy_name}/deploy.yml"
+yaml_file="${ROOT_DIR}/XPolicyLab/policy/${policy_name}/deploy.yml"
 
 echo -e "\033[33m[INFO] Project root: ${ROOT_DIR}\033[0m"
 echo -e "\033[33m[INFO] Using config file: ${yaml_file}\033[0m"
@@ -49,5 +49,5 @@ python "${ROOT_DIR}/XPolicyLab/setup_policy_server.py" \
 SERVER_PID=$!
 echo -e "\033[32m[SERVER] PID=${SERVER_PID} (running in background)\033[0m"
 
-bash "${UTILS_DIR}/run_policy_client.sh" "${sim_conda_env}" "${FREE_PORT}" "${task_name}" "${env_cfg}" "${policy_name}" "${ROOT_DIR}"
+bash "${UTILS_DIR}/run_debug_policy_client.sh" "${sim_conda_env}" "${FREE_PORT}" "${task_name}" "${env_cfg}" "${policy_name}" "${ROOT_DIR}"
 echo -e "\033[33m[MAIN] eval_policy_client has finished; cleaning up server.\033[0m"
