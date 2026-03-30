@@ -11,8 +11,9 @@ gpu_id=${5}
 seed=${6}
 policy_conda_env=${7}
 eval_env_conda_env=${8}
-TRAIN_CONFIG_NAME=${9}
-REPO_ID=${10}
+MODEL_PATH=${9}
+TRAIN_CONFIG_NAME=${10}
+REPO_ID=${11}
 
 export CUDA_VISIBLE_DEVICES="${gpu_id}"
 echo -e "\033[33m[INFO] GPU ID (to use): ${gpu_id}\033[0m"
@@ -46,6 +47,7 @@ python "${ROOT_DIR}/XPolicyLab/setup_policy_server.py" \
         policy_name="${policy_name}" \
         action_type="${action_type}" \
         action_dim="${action_dim}" \
+        model_path="${MODEL_PATH}" \
         train_config_name="${TRAIN_CONFIG_NAME}" \
         repo_id="${REPO_ID}"
     &
