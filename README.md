@@ -218,7 +218,7 @@ python "${ROOT_DIR}/XPolicyLab/setup_policy_server.py" \
     --overrides \
         port="${FREE_PORT}" \
         task_name="${task_name}" \
-        env_cfg="${env_cfg}" \
+        env_cfg_type="${env_cfg_type}" \
         expert_data_num="${expert_data_num}" \
         seed="${seed}" \
         policy_name="${policy_name}" \
