@@ -69,6 +69,7 @@ def data_transform(path, episode_num, load_data_dir, save_dir, robot_action_dim_
                 action = state
                 actions.append(action)
 
+        print()
         hdf5path = os.path.join(save_dir, f"episode_{current_episode}.hdf5")
 
         with h5py.File(hdf5path, "w") as f:
