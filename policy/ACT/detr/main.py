@@ -112,6 +112,7 @@ def get_args_parser():
     parser.add_argument("--num_epochs", action="store", type=int, help="num_epochs", required=True)
     parser.add_argument("--kl_weight", action="store", type=int, help="KL Weight", required=False)
     parser.add_argument("--chunk_size", action="store", type=int, help="chunk_size", required=False)
+    parser.add_argument("--ckpt_setting", action="store", type=int, help="chunk_size", required=False)
     parser.add_argument("--temporal_agg", action="store_true")
     parser.add_argument("--save_freq", action="store", type=int, help="save ckpt frequency", required=False, default=6000)
 
@@ -126,7 +127,7 @@ def build_ACT_model_and_optimizer(args_override, policy_cfg=None):
             setattr(args, k, v)
     else:
         args = policy_cfg
-
+        
     model = build_ACT_model(args)
     model.cuda()
 

@@ -248,7 +248,7 @@ def build(args):
         transformer,
         encoder,
         state_dim=state_dim,
-        num_queries=args.chunk_size,  #gyh
+        num_queries=args.chunk_size,
         camera_names=args.camera_names,
     )
 

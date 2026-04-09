@@ -4,9 +4,9 @@ import os, json
 current_dir = os.path.dirname(__file__)
 
 ### Task parameters
-SIM_TASK_CONFIGS_PATH = os.path.join(current_dir, "./SIM_TASK_CONFIGS.json")
-with open(SIM_TASK_CONFIGS_PATH, "r") as f:
-    SIM_TASK_CONFIGS = json.load(f)
+TASK_CONFIGS_PATH = os.path.join(current_dir, "./TASK_CONFIGS.json")
+with open(TASK_CONFIGS_PATH, "r") as f:
+    TASK_CONFIGS = json.load(f)
 
 ### Simulation envs fixed constants
 DT = 0.02
@@ -44,7 +44,6 @@ MASTER_GRIPPER_POSITION_CLOSE = 0.01244
 PUPPET_GRIPPER_POSITION_OPEN = 0.05800
 PUPPET_GRIPPER_POSITION_CLOSE = 0.01844
 
-# Gripper joint limits (qpos[6])
 MASTER_GRIPPER_JOINT_OPEN = 0.3083
 MASTER_GRIPPER_JOINT_CLOSE = -0.6842
 PUPPET_GRIPPER_JOINT_OPEN = 1.4910

@@ -31,15 +31,15 @@ def main(args):
     ckpt_dir = args["ckpt_dir"]
     policy_class = args["policy_class"]
     onscreen_render = args["onscreen_render"]
-    task_name = args["task_name"]
+    ckpt_setting = args["ckpt_setting"]
     batch_size_train = args["batch_size"]
     batch_size_val = args["batch_size"]
     num_epochs = args["num_epochs"]
 
     # get task parameters
-    from constants import SIM_TASK_CONFIGS
+    from constants import TASK_CONFIGS
 
-    task_config = SIM_TASK_CONFIGS[task_name]
+    task_config = TASK_CONFIGS[ckpt_setting]
     dataset_dir = task_config["dataset_dir"]
     num_episodes = task_config["num_episodes"]
     episode_len = task_config["episode_len"]
@@ -86,7 +86,7 @@ def main(args):
         "policy_class": policy_class,
         "onscreen_render": onscreen_render,
         "policy_config": policy_config,
-        "task_name": task_name,
+        "ckpt_setting": ckpt_setting,
         "seed": args["seed"],
         "temporal_agg": args["temporal_agg"],
         "camera_names": camera_names,
@@ -232,7 +232,7 @@ if __name__ == "__main__":
         help="policy_class, capitalize",
         required=True,
     )
-    parser.add_argument("--task_name", action="store", type=str, help="task_name", required=True)
+    parser.add_argument("--ckpt_setting", action="store", type=str, help="ckpt_setting", required=True)
     parser.add_argument("--batch_size", action="store", type=int, help="batch_size", required=True)
     parser.add_argument("--seed", action="store", type=int, help="seed", required=True)
     parser.add_argument("--num_epochs", action="store", type=int, help="num_epochs", required=True)

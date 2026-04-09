@@ -107,20 +107,20 @@ if __name__ == "__main__":
 
     begin = data_transform(os.path.join("../../../data/", task_name, env_cfg_type, 'data'), expert_data_num, load_data_dir, save_dir, robot_action_dim_info)
 
-    SIM_TASK_CONFIGS_PATH = "./SIM_TASK_CONFIGS.json"
+    TASK_CONFIGS_PATH = "./TASK_CONFIGS.json"
 
     try:
-        with open(SIM_TASK_CONFIGS_PATH, "r") as f:
-            SIM_TASK_CONFIGS = json.load(f)
+        with open(TASK_CONFIGS_PATH, "r") as f:
+            TASK_CONFIGS = json.load(f)
     except Exception:
-        SIM_TASK_CONFIGS = {}
+        TASK_CONFIGS = {}
 
-    SIM_TASK_CONFIGS[f"{task_name}-{env_cfg_type}-{expert_data_num}-{action_type}"] = {
+    TASK_CONFIGS[f"{task_name}-{env_cfg_type}-{expert_data_num}-{action_type}"] = {
         "dataset_dir": save_dir,
         "num_episodes": expert_data_num,
         "episode_len": 5000,
         "camera_names": ["cam_head", "cam_right_wrist", "cam_left_wrist"],
     }
 
-    with open(SIM_TASK_CONFIGS_PATH, "w") as f:
-        json.dump(SIM_TASK_CONFIGS, f, indent=4)
+    with open(TASK_CONFIGS_PATH, "w") as f:
+        json.dump(TASK_CONFIGS, f, indent=4)

@@ -47,6 +47,8 @@ python "${ROOT_DIR}/XPolicyLab/setup_policy_server.py" \
         policy_name="${policy_name}" \
         action_type="${action_type}" \
         action_dim="${action_dim}" \
+        ckpt_dir="./act_ckpt/act-${task_name}/${env_cfg_type}-${expert_data_num}-${action_type}" \
+        ckpt_setting="${task_name}-${env_cfg_type}-${expert_data_num}-${action_type}" \
     &
 SERVER_PID=$!
 echo -e "\033[32m[SERVER] PID=${SERVER_PID} (running in background)\033[0m"

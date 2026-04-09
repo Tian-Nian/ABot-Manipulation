@@ -2,7 +2,6 @@
 """
 Backbone modules.
 """
-from collections import OrderedDict
 import os
 import torch
 import torch.nn.functional as F
@@ -100,7 +99,6 @@ class Backbone(BackboneBase):
         num_channels = 512 if name in ('resnet18', 'resnet34') else 2048
         super().__init__(backbone, train_backbone, num_channels, return_interm_layers)
 
-
 class Joiner(nn.Sequential):
 
     def __init__(self, backbone, position_embedding):
@@ -116,7 +114,6 @@ class Joiner(nn.Sequential):
             pos.append(self[1](x).to(x.dtype))
 
         return out, pos
-
 
 def build_backbone(args):
     position_embedding = build_position_encoding(args)

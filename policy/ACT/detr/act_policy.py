@@ -106,6 +106,9 @@ class ACT:
                 "kl_weight": 0.1,  # Default value, can be overridden
                 "device": "cuda:0",
             }
+
+        self.camera_names = policy_cfg.camera_names
+
         self.policy = ACTPolicy(args_override, policy_cfg)
         self.device = torch.device(args_override["device"])
         self.policy.to(self.device)
@@ -179,8 +182,7 @@ class ACT:
         # Prepare images following imitate_episodes.py pattern
         # Stack images from all cameras
         curr_images = []
-        camera_names = ["head_cam", "left_cam", "right_cam"]
-        for cam_name in camera_names:
+        for cam_name in self.camera_names:
             curr_images.append(obs[cam_name])
         curr_image = np.stack(curr_images, axis=0)
         curr_image = torch.from_numpy(curr_image).float().to(self.device).unsqueeze(0)

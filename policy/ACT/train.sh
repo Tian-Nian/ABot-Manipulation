@@ -19,7 +19,8 @@ action_dim=$(bash "${UTILS_DIR}/get_action_dim.sh" "${ROOT_DIR}" "${env_cfg_type
 export ACT_ACTION_DIM=${action_dim}
 
 python3 imitate_episodes.py \
-    --task_name ${task_name}-${env_cfg_type}-${expert_data_num}-${action_type} \
+    --task_name ${task_name} \
+    --ckpt_setting ${task_name}-${env_cfg_type}-${expert_data_num}-${action_type} \
     --ckpt_dir ./act_ckpt/act-${task_name}/${env_cfg_type}-${expert_data_num}-${action_type} \
     --policy_class ACT \
     --kl_weight 10 \
