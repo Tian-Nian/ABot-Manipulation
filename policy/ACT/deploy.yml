@@ -33,6 +33,6 @@ dec_layers: 7
 pre_norm: false
 dropout: 0.1
 camera_names:
-  - cam_high
+  - cam_head
   - cam_right_wrist
   - cam_left_wrist
