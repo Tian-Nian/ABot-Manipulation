@@ -237,7 +237,7 @@ SERVER_PID=$!
 
 ### 5. 仿真部署与调试体验
 
-当一切调试完毕后，将 `eval.sh` 最后一行的 `run_debug_policy_client` 替换为 `run_policy_client`，即可真正在仿真环境中进行部署。
+当一切调试完毕后，将 `eval.sh` 最后一行的 `run_debug_env_client` 替换为 `run_policy_client`，即可真正在仿真环境中进行部署。
 
 您可以通过以下流程体验调试器：
 

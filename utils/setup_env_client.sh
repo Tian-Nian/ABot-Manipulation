@@ -19,9 +19,9 @@ PY
 )
 
 if [[ "${eval_env}" == "debug" ]]; then
-    bash "${UTILS_DIR}/run_debug_policy_client.sh" "${eval_batch}" "${eval_env_conda_env}" "${FREE_PORT}" "${task_name}" "${env_cfg_type}" "${policy_name}" "${ROOT_DIR}"
+    bash "${UTILS_DIR}/run_debug_env_client.sh" "${eval_batch}" "${eval_env_conda_env}" "${FREE_PORT}" "${task_name}" "${env_cfg_type}" "${policy_name}" "${ROOT_DIR}"
 elif [[ "${eval_env}" == "sim" ]]; then
-    bash "${UTILS_DIR}/run_sim_policy_client.sh" "${eval_batch}" "${eval_env_conda_env}" "${FREE_PORT}" "${task_name}" "${env_cfg_type}" "${policy_name}" "${ROOT_DIR}"
+    bash "${UTILS_DIR}/run_sim_env_client.sh" "${eval_batch}" "${eval_env_conda_env}" "${FREE_PORT}" "${task_name}" "${env_cfg_type}" "${policy_name}" "${ROOT_DIR}"
 elif [[ "${eval_env}" == "real" ]]; then
     bash "${UTILS_DIR}/run_real_policy_client.sh" "${eval_batch}" "${eval_env_conda_env}" "${FREE_PORT}" "${task_name}" "${env_cfg_type}" "${policy_name}" "${ROOT_DIR}"
 else
