@@ -69,7 +69,6 @@ def data_transform(path, episode_num, load_data_dir, save_dir, robot_action_dim_
                 action = state
                 actions.append(action)
 
-        print()
         hdf5path = os.path.join(save_dir, f"episode_{current_episode}.hdf5")
 
         with h5py.File(hdf5path, "w") as f:
@@ -82,8 +81,8 @@ def data_transform(path, episode_num, load_data_dir, save_dir, robot_action_dim_
             image.create_dataset("cam_right_wrist", data=np.stack(cam_right_wrist_list), dtype=np.uint8)
 
         begin += 1
-        print(f"ACT: proccess episode {current_episode} success!", end='\r')
-
+        print(f"ACT: proccess episode {current_episode + 1} success!", end='\r')
+    
     return begin
 
 if __name__ == "__main__":
@@ -106,6 +105,8 @@ if __name__ == "__main__":
     robot_action_dim_info = get_robot_action_dim_info(env_cfg_type)
 
     begin = data_transform(os.path.join("../../../data/", task_name, env_cfg_type, 'data'), expert_data_num, load_data_dir, save_dir, robot_action_dim_info)
+
+    print()
 
     TASK_CONFIGS_PATH = "./TASK_CONFIGS.json"
 
