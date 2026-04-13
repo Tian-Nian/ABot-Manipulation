@@ -1,18 +1,5 @@
 # Being_H05
 
-## 目录说明
-
-`Being_H05` 是放在 `XPolicyLab/policy` 下的本地自包含策略目录，当前包含：
-
-- `deploy.py` / `model.py`：XPolicyLab 的策略接口实现
-- `deploy.yml`：XPolicyLab policy server 配置
-- `Being-H/`：本地拷贝的 Being-H 推理/训练代码
-
-当前实现目标是：
-
-- 在 **XPolicyLab 项目内部** 完成策略加载和调试
-- 不依赖 `RoboTwin/policy/BEingH*` 的运行时代码
-- `model.py` 直接本地加载 `BeingHPolicy`
 
 ## 环境配置
 
