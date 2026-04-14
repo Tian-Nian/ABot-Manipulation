@@ -9,7 +9,7 @@ expert_data_num=${3}
 action_type=${4}
 gpu_id=${5}
 seed=${6}
-policy_conda_env=${7}
+policy_uv_env_path=${7}
 eval_env_conda_env=${8}
 MODEL_PATH=${9}
 TRAIN_CONFIG_NAME=${10}
@@ -30,9 +30,9 @@ cleanup(){ [[ -n "${SERVER_PID:-}" ]] && echo -e "\033[31m[CLEANUP] Killing serv
 trap cleanup EXIT
 
 # ==================== 启动 server ====================
-echo -e "\033[32m[SERVER] Activating Conda environment: ${policy_conda_env}\033[0m"
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate "${policy_conda_env}"
+echo -e "\033[32m[SERVER] Activating uv environment: ${policy_uv_env_path}\033[0m"
+
+source ${policy_uv_env_path}/.venv/bin/activate
 
 echo -e "\033[32m[SERVER] Launching policy_model_server in background...\033[0m"
 PYTHONWARNINGS=ignore::UserWarning \
@@ -49,11 +49,11 @@ python "${ROOT_DIR}/XPolicyLab/setup_policy_server.py" \
         action_dim="${action_dim}" \
         model_path="${MODEL_PATH}" \
         train_config_name="${TRAIN_CONFIG_NAME}" \
-        repo_id="${REPO_ID}"
-    &
+        repo_id="${REPO_ID}" \
+&
 SERVER_PID=$!
 echo -e "\033[32m[SERVER] PID=${SERVER_PID} (running in background)\033[0m"
 
 # ==================== 启动 client 进行评测 ====================
-bash "${UTILS_DIR}/run_debug_env_client.sh" "${eval_env_conda_env}" "${FREE_PORT}" "${task_name}" "${env_cfg_type}" "${policy_name}" "${ROOT_DIR}"
+bash "${UTILS_DIR}/run_debug_env_client.sh" "1" "${eval_env_conda_env}" "${FREE_PORT}" "${task_name}" "${env_cfg_type}" "${policy_name}" "${ROOT_DIR}"
 echo -e "\033[33m[MAIN] eval_policy_client has finished; cleaning up server.\033[0m"
