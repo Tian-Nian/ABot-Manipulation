@@ -22,9 +22,20 @@ from XPolicyLab.utils.process_data import (
     unpack_robot_state,
 )
 
-from configs import VA_CONFIGS
-from distributed.util import init_distributed
-from wan_va_server import VA_Server
+from .lingbot_va.wan_va.configs import VA_CONFIGS
+from .lingbot_va.wan_va.distributed.util import init_distributed
+from .lingbot_va.wan_va.wan_va_server import VA_Server
+
+
+DEFAULT_CHECKPOINT_PATH = "/mnt/pfs/pg4hw0/niantian/lingbot-va/train_out/checkpoints/checkpoint_step_3600"
+DEFAULT_CONFIG_NAME = "robotwin30_train"
+
+JOINT_CONTROL_INDICES = np.array([
+    14, 15, 16, 17, 18, 19,
+    28,
+    21, 22, 23, 24, 25, 26,
+    29,
+], dtype=np.int64)
 
 
 def extract_image(observation, candidate_names):
@@ -74,11 +85,14 @@ class Model(ModelTemplate):
     def __init__(self, model_cfg) -> None:
         self.model_cfg = dict(model_cfg)
 
-        self.task_name = model_cfg.get("task_name", "default_task")
-        self.action_type = model_cfg["action_type"]
-        self.default_prompt = model_cfg.get("prompt", self.task_name)
+        self.model_cfg.setdefault("config_name", DEFAULT_CONFIG_NAME)
+        self.model_cfg.setdefault("checkpoint_path", DEFAULT_CHECKPOINT_PATH)
 
-        env_cfg = model_cfg.get("env_cfg")
+        self.task_name = self.model_cfg.get("task_name", "default_task")
+        self.action_type = self.model_cfg["action_type"]
+        self.default_prompt = self.model_cfg.get("prompt", self.task_name)
+
+        env_cfg = self.model_cfg.get("env_cfg")
         if env_cfg is None:
             self.robot_action_dim_info = None
         else:
@@ -90,11 +104,14 @@ class Model(ModelTemplate):
 
         self.observation_window: list[dict[str, Any]] | None = None
         self._latest_env_idx_list: list[int] = [0]
+        self._skip_leading_chunk_on_next_action = True
+        self._first_observation: dict[str, Any] | None = None
+        self._latest_raw_action_chunk: np.ndarray | None = None
 
         self.vla = self.get_model(self.model_cfg)
 
     def get_model(self, model_cfg):
-        config_name = model_cfg["config_name"]
+        config_name = model_cfg.get("config_name", DEFAULT_CONFIG_NAME)
         if config_name not in VA_CONFIGS:
             raise KeyError(f"Unknown config_name: {config_name}")
 
@@ -106,15 +123,24 @@ class Model(ModelTemplate):
         checkpoint_path = (
             model_cfg.get("checkpoint_path")
             or model_cfg.get("wan22_pretrained_model_name_or_path")
+            or getattr(job_config, "wan22_pretrained_model_name_or_path", None)
+            or DEFAULT_CHECKPOINT_PATH
         )
-        if checkpoint_path is not None:
-            job_config.wan22_pretrained_model_name_or_path = checkpoint_path
+        checkpoint_path = str(Path(checkpoint_path).expanduser())
+        if not Path(checkpoint_path).is_dir():
+            raise FileNotFoundError(f"Checkpoint directory not found: {checkpoint_path}")
+
+        model_cfg["checkpoint_path"] = checkpoint_path
+        job_config.wan22_pretrained_model_name_or_path = checkpoint_path
+        if hasattr(job_config, "infer_mode"):
+            job_config.infer_mode = "server"
 
         rank = int(os.getenv("RANK", 0))
         local_rank = int(os.getenv("LOCAL_RANK", 0))
         world_size = int(os.getenv("WORLD_SIZE", 1))
 
-        init_distributed(world_size, local_rank, rank)
+        if world_size > 1:
+            init_distributed(world_size, local_rank, rank)
 
         job_config.rank = rank
         job_config.local_rank = local_rank
@@ -135,6 +161,26 @@ class Model(ModelTemplate):
             "prompt": observation["task"],
         }
 
+    def _to_engine_obs_batch(self, observation_list, state=None):
+        obs_batch = []
+        prompt = self.default_prompt
+
+        for observation in observation_list:
+            image_dict = {
+                key: observation[key]
+                for key in self.vla.job_config.obs_cam_keys
+            }
+            obs_batch.append(image_dict)
+            prompt = observation.get("task", prompt)
+
+        payload = {
+            "obs": obs_batch,
+            "prompt": prompt,
+        }
+        if state is not None:
+            payload["state"] = state
+        return payload
+
     def _format_action_chunk(self, action):
         action = np.asarray(action)
 
@@ -145,6 +191,42 @@ class Model(ModelTemplate):
 
         return action
 
+    def _convert_to_joint_control_chunk(self, action_chunk):
+        action_chunk = np.asarray(action_chunk)
+
+        if action_chunk.ndim != 2:
+            raise ValueError(f"Expected action chunk with ndim=2, got shape {action_chunk.shape}.")
+
+        if action_chunk.shape[1] == len(JOINT_CONTROL_INDICES):
+            return action_chunk
+
+        if action_chunk.shape[1] != 30:
+            raise ValueError(
+                "LingBot_VA joint-control conversion expects raw action dim 30 or already-converted dim 14, "
+                f"got {action_chunk.shape[1]}."
+            )
+
+        return action_chunk[:, JOINT_CONTROL_INDICES]
+
+    def _maybe_trim_initial_action_chunk(self, action_chunk):
+        action_chunk = np.asarray(action_chunk)
+
+        if not self._skip_leading_chunk_on_next_action:
+            return action_chunk
+
+        skip_count = int(getattr(self.vla.job_config, "action_per_frame", 0))
+        if skip_count <= 0:
+            return action_chunk
+
+        if action_chunk.shape[0] <= skip_count:
+            raise ValueError(
+                "Initial-action trimming would remove the whole chunk: "
+                f"chunk_len={action_chunk.shape[0]}, skip_count={skip_count}."
+            )
+
+        self._skip_leading_chunk_on_next_action = False
+        return action_chunk[skip_count:]
+
     def infer(self, observation):
         if "reset" in observation and observation["reset"]:
             self.reset(
@@ -154,7 +236,10 @@ class Model(ModelTemplate):
 
         model_obs = self._to_engine_obs(observation)
         result = self.vla.infer(model_obs)
+        self._latest_raw_action_chunk = np.asarray(result["action"])
         action = self._format_action_chunk(result["action"])
+        action = self._convert_to_joint_control_chunk(action)
+        action = self._maybe_trim_initial_action_chunk(action)
         return dict(action=action)
 
     def update_obs(self, obs):
@@ -169,8 +254,23 @@ class Model(ModelTemplate):
         self.observation_window = encoded_obs_list
 
     def get_action(self, **kwargs):
-        action_list = self.get_action_batch(env_idx_list=[self._latest_env_idx_list[0]], **kwargs)
-        return action_list[0]
+        if self.observation_window is None:
+            raise AssertionError("update_obs or update_obs_batch first!")
+
+        if self._first_observation is None:
+            self._first_observation = self.observation_window[0]
+
+        action_chunk = self.infer(self._first_observation)["action"]
+
+        if self.robot_action_dim_info is None:
+            return action_chunk
+
+        return unpack_robot_state(
+            action_chunk,
+            self.action_type,
+            self.robot_action_dim_info,
+            source_type="obs",
+        )
 
     def get_action_batch(self, env_idx_list=None, **kwargs):
         if self.observation_window is None:
@@ -196,6 +296,31 @@ class Model(ModelTemplate):
 
         return action_list
 
+    def get_action_per_frame(self):
+        return int(getattr(self.vla.job_config, "action_per_frame", 0))
+
+    def get_keyframe_interval(self):
+        action_per_frame = int(getattr(self.vla.job_config, "action_per_frame", 0))
+        if action_per_frame <= 0:
+            return 0
+        return action_per_frame // 4
+
+    def update_cache(self, obs_list):
+        if not obs_list:
+            return None
+
+        if self._latest_raw_action_chunk is None:
+            raise AssertionError("get_action first so the model has a raw action chunk for KV cache update.")
+
+        encoded_obs_list = [
+            encode_obs(obs, self.action_type, self.robot_action_dim_info, self.default_prompt)
+            for obs in obs_list
+        ]
+        cache_obs = self._to_engine_obs_batch(encoded_obs_list, state=self._latest_raw_action_chunk)
+        cache_obs["compute_kv_cache"] = True
+        self.vla.infer(cache_obs)
+        return None
+
     def reset(self, checkpoint_path=None) -> None:
         if checkpoint_path is not None:
             self.model_cfg["checkpoint_path"] = checkpoint_path
@@ -205,6 +330,9 @@ class Model(ModelTemplate):
 
         self.observation_window = None
         self._latest_env_idx_list = [0]
+        self._skip_leading_chunk_on_next_action = True
+        self._first_observation = None
+        self._latest_raw_action_chunk = None
 
 
 def _make_fake_obs(prompt: str):
@@ -228,55 +356,3 @@ def _make_fake_obs(prompt: str):
         "prompt": prompt,
         "env_idx": 0,
     }
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config-name", type=str, required=True)
-    parser.add_argument("--action-type", type=str, required=True)
-    parser.add_argument("--env-cfg", type=str, default=None)
-    parser.add_argument("--task-name", type=str, default="robotwin_task")
-    parser.add_argument("--prompt", type=str, default="pick up the object")
-    parser.add_argument("--save_root", type=str, default="visualization/")
-    parser.add_argument("--checkpoint-path", type=str, default=None)
-    args = parser.parse_args()
-
-    model_cfg = {
-        "config_name": args.config_name,
-        "task_name": args.task_name,
-        "action_type": args.action_type,
-        "env_cfg": args.env_cfg,
-        "prompt": args.prompt,
-        "save_root": args.save_root,
-    }
-    if args.checkpoint_path is not None:
-        model_cfg["checkpoint_path"] = args.checkpoint_path
-
-    model = Model(model_cfg)
-
-    fake_obs = _make_fake_obs(args.prompt)
-
-    print("Testing update_obs ...")
-    model.update_obs(fake_obs)
-
-    print("Testing get_action ...")
-    action = model.get_action()
-    print("get_action output type:", type(action))
-    print("get_action output:", action)
-
-    print("Testing update_obs_batch ...")
-    model.update_obs_batch([fake_obs, fake_obs])
-
-    print("Testing get_action_batch ...")
-    actions = model.get_action_batch(env_idx_list=[0, 1])
-    print("get_action_batch output type:", type(actions))
-    print("get_action_batch output:", actions)
-
-    print("Testing reset ...")
-    model.reset()
-
-    print("Model interface test passed.")
-
-
-if __name__ == "__main__":
-    main()
