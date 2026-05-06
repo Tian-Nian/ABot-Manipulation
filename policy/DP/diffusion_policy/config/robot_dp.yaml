@@ -5,6 +5,7 @@ defaults:
 name: robot_${task.name}
 _target_: diffusion_policy.workspace.robotworkspace.RobotWorkspace
 
+dataset_name: null
 task_name: ${task.name}
 shape_meta: ${task.shape_meta}
 exp_name: "default"
@@ -152,4 +153,3 @@ hydra:
 
 setting: null
 expert_data_num: null
-head_camera_type: null

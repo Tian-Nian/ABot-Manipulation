@@ -24,6 +24,7 @@ class Model(ModelTemplate):
             model_training_config = yaml.safe_load(f)
         
         model_training_config['action_dim'] = action_dim
+        model_training_config['dataset_name'] = model_cfg['dataset_name']
         model_training_config['task'] = model_cfg['task_name']
         n_obs_steps = model_training_config['n_obs_steps']
         n_action_steps = model_training_config['n_action_steps']
@@ -35,7 +36,7 @@ class Model(ModelTemplate):
         self.robot_action_dim_info = get_robot_action_dim_info(model_cfg['env_cfg_type'])
 
     def get_model(self, model_cfg):
-        ckpt_file = os.path.join(parent_dir, f"checkpoints/{model_cfg['task_name']}-{model_cfg['env_cfg_type']}-{model_cfg['expert_data_num']}-{model_cfg['action_type']}-{model_cfg['seed']}/{model_cfg['checkpoint_num']}.ckpt")
+        ckpt_file = os.path.join(parent_dir, f"checkpoints/{model_cfg['dataset_name']}-{model_cfg['task_name']}-{model_cfg['env_cfg_type']}-{model_cfg['expert_data_num']}-{model_cfg['action_type']}-{model_cfg['seed']}/{model_cfg['checkpoint_num']}.ckpt")
 
         # load checkpoint and workspace
         payload = torch.load(open(ckpt_file, "rb"), pickle_module=dill)
@@ -85,13 +86,14 @@ class Model(ModelTemplate):
 def encode_obs(observation, action_type, robot_action_dim_info):
     head_img = (np.moveaxis(observation["vision"]["cam_head"]["color"], -1, 0) / 255)
     head_img = np.transpose(cv2.resize(np.transpose(head_img, (1, 2, 0)), (320, 240), interpolation=cv2.INTER_AREA), (2, 0, 1))
-    # resize
-    # left_cam = (np.moveaxis(observation["observation"]["left_camera"]["rgb"], -1, 0) / 255)
-    # right_cam = (np.moveaxis(observation["observation"]["right_camera"]["rgb"], -1, 0) / 255)
-    obs = dict( # TODO
+    left_cam = (np.moveaxis(observation["vision"]["cam_left_wrist"]["color"], -1, 0) / 255)
+    left_cam = np.transpose(cv2.resize(np.transpose(left_cam, (1, 2, 0)), (320, 240), interpolation=cv2.INTER_AREA), (2, 0, 1))
+    right_cam = (np.moveaxis(observation["vision"]["cam_right_wrist"]["color"], -1, 0) / 255)
+    right_cam = np.transpose(cv2.resize(np.transpose(right_cam, (1, 2, 0)), (320, 240), interpolation=cv2.INTER_AREA), (2, 0, 1))
+    obs = dict(
         head_cam=head_img,
-        # left_cam=left_cam,
-        # right_cam=right_cam,
+        left_cam=left_cam,
+        right_cam=right_cam,
         agent_pos=pack_robot_state(observation, action_type, robot_action_dim_info, source_type='obs'),
     )
     return obs

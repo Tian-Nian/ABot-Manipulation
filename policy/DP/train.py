@@ -25,12 +25,7 @@ OmegaConf.register_new_resolver("eval", eval, replace=True)
 def main(cfg: OmegaConf):
     # resolve immediately so all the ${now:} resolvers
     # will use the same time.
-    fixed_img_shape = [3, 240, 320]
-    cfg.task.image_shape = fixed_img_shape
-    cfg.task.shape_meta.obs.head_cam.shape = fixed_img_shape
     OmegaConf.resolve(cfg)
-    cfg.task.image_shape = fixed_img_shape
-    cfg.task.shape_meta.obs.head_cam.shape = fixed_img_shape
 
     cls = hydra.utils.get_class(cfg._target_)
     workspace: BaseWorkspace = cls(cfg)

@@ -83,6 +83,12 @@ class DPRunner:
             obs_dict_input["head_cam"] = torch.stack(
                 [obs_torch["head_cam"] for obs_torch in obs_list_numpy], dim=0
             )
+            obs_dict_input["left_cam"] = torch.stack(
+                [obs_torch["left_cam"] for obs_torch in obs_list_numpy], dim=0
+            )
+            obs_dict_input["right_cam"] = torch.stack(
+                [obs_torch["right_cam"] for obs_torch in obs_list_numpy], dim=0
+            )
             obs_dict_input["agent_pos"] = torch.stack(
                 [obs_torch["agent_pos"] for obs_torch in obs_list_numpy], dim=0
             )

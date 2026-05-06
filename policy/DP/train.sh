@@ -1,11 +1,12 @@
 #!/bin/bash
 
-task_name=${1}
-env_cfg_type=${2}
-expert_data_num=${3}
-action_type=${4}
-seed=${5}
-gpu_id=${6}
+dataset_name=${1}
+task_name=${2}
+env_cfg_type=${3}
+expert_data_num=${4}
+action_type=${5}
+seed=${6}
+gpu_id=${7}
 
 DEBUG=False
 
@@ -16,7 +17,7 @@ run_dir="data/outputs/${exp_name}_seed${seed}"
 echo -e "\033[33mgpu id (to use): ${gpu_id}\033[0m"
 
 # Get Action Dimension from env_cfg_type
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 UTILS_DIR="${ROOT_DIR}/XPolicyLab/utils"
 action_dim=$(bash "${UTILS_DIR}/get_action_dim.sh" "${ROOT_DIR}" "${env_cfg_type}"); echo -e "\033[33m[INFO] Action dim: ${action_dim}\033[0m"
 
@@ -36,14 +37,15 @@ export HYDRA_FULL_ERROR=1
 export CUDA_VISIBLE_DEVICES=${gpu_id}
 
 if [ ! -d  ]; then
-    bash process_data.sh ${task_name} ${env_cfg_type} ${expert_data_num} ${action_type}
+    bash process_data.sh ${dataset_name} ${task_name} ${env_cfg_type} ${expert_data_num} ${action_type}
 fi
 
 python train.py --config-name="${alg_name}.yaml" \
+                dataset_name="${dataset_name}" \
                 task.name="${task_name}" \
                 "task.shape_meta.action.shape=[${action_dim}]" \
                 "task.shape_meta.obs.agent_pos.shape=[${action_dim}]" \
-                task.dataset.zarr_path="data/${task_name}-${env_cfg_type}-${expert_data_num}-${action_type}.zarr" \
+                task.dataset.zarr_path="data/${dataset_name}-${task_name}-${env_cfg_type}-${expert_data_num}-${action_type}.zarr" \
                 training.debug=$DEBUG \
                 training.seed=${seed} \
                 training.device="cuda:0" \
