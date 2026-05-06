@@ -38,7 +38,7 @@ python "${ROOT_DIR}/XPolicyLab/setup_policy_server.py" \
     --config_path "${yaml_file}" \
     --overrides \
         port="${FREE_PORT}" \
-        dataset_name="${dataset_name}"
+        dataset_name="${dataset_name}" \
         task_name="${task_name}" \
         env_cfg_type="${env_cfg_type}" \
         expert_data_num="${expert_data_num}" \
