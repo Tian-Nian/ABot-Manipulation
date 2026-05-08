@@ -13,8 +13,23 @@ mkdir demo_env
 cd demo_env
 git clone git@github.com:Luminis-Platform/XPolicyLab.git
 
-# 拉取演示数据及环境配置，数据集格式为`data/${task_name}/${env_cfg}`
-bash clone_demo_tutorial.sh
+# 拉取演示数据及环境配置，数据集格式为`data/${dataset_name}/${task_name}/${env_cfg}`
+bbash scripts/download_data.sh
+```
+将内容移到`XPolicyLab`同级目录下。下面是示例的目录结构。
+```text
+demo_env/
+├── data
+│   └── {dataset_name}
+│       └── {task_name}
+│            └── {env_cfg}
+│                 ├── data
+│                 ├── preview_video
+│                 ├── scene_layout
+│                 ├── seed.txt
+│                 └── traj_data
+├── env_cfg
+└── XPolicyLab
 ```
 
 接着，创建并激活 Conda 环境，安装项目依赖：
@@ -41,7 +56,7 @@ Observation Data Format v1.0
 │   └── frequency                              (Field)    int
 ├── vision/                                    (Group)
 │   ├── cam_head/                              (Group)
-│   │   ├── color                              (Field)    (H, W, 3)
+│   │   ├── color                              (Field)    (H, W, 3), 3通道为BGR
 │   │   ├── depth                              (Field)    (H, W) or (H, W, 1)
 │   │   ├── approximate_depth                  (Field)    optional
 │   │   ├── intrinsic_matrix                   (Field)    (3, 3)
@@ -83,7 +98,7 @@ Trajectory Data Format v1.0
 │   └── frequency                              (Dataset)  int, control / recording frequency in Hz
 ├── vision/                                    (Group)
 │   ├── cam_head/                              (Group)
-│   │   ├── colors                             (Dataset)  (T, H, W, 3) uint8 RGB images
+│   │   ├── colors                             (Dataset)  (T, H, W, 3) uint8 BGR images
 │   │   ├── depths                             (Dataset)  (T, H, W) or (T, H, W, 1), depth images
 │   │   ├── approximate_depths                 (Dataset)  optional, approximated / processed depth images
 │   │   ├── intrinsic_matrix                   (Dataset)  (3, 3) or (T, 3, 3)
@@ -141,14 +156,33 @@ demo_policy
 ```bash
 bash create_policy.sh ${policy_name}
 ```
+`create_policy.sh`会在`XPolicyLab/policy`创建新policy的目录，可以查看内容文件的相关注释以了解参数。
+
+可将外部项目源码放在 `XPolicyLab/policy/${policy_name}` 下的独立子目录中。例如 `XPolicyLab/policy/DP/diffusion_policy` 。
+
+拉取外部源码后，请删除该源码目录中的 `.git`，避免被 Git 识别为 submodule 。完成后**先进行一次提交保留源码快照**，再进行适配修改，以方便后续修改内容的对照。
 
 **常见参数说明：**
+- `dataset_name`: 数据集名称，目的是在data目录下区分不同项目的数据集，例如RoboTwin和RoboDojo。
 - `task_name`: 任务名称。
 - `env_cfg_type`: 采集或评测的环境配置（包含本体信息等）。在 `demo_env/env_cfg_type` 中可以查看示例。教程中提供了两个示范数据：`dual_franka_panda`（双臂夹爪）和 `g1_inspire`（人形灵巧手）。
 - `expert_data_num`: 训练使用的轨迹数量。
 - `action_type`: 模型使用的数据类型（如 `ee` 或 `joint`）。这会影响使用的数据内容以及模型输入输出的维度。
 
 > **建议：** 模型的 Checkpoint 命名应包含上述所有参数，以便后续唯一指定加载。当然，也支持用户自定义命名。
+
+#### 完善 install.sh
+策略创建后，在根据原项目进行环境配置的同时完善install.sh
+
+需要注意：确保每个policy的`install.sh`要分别对policy目录以及XPolicyLab的项目目录进行`pip install -e . `，以支持我们部分函数的调用。
+
+建议参考 `demo_env/XPolicyLab/policy/DP/install.sh`，如下所示。
+
+```bash
+pip install -e . #policy目录下pip install -e .
+cd ../../
+pip install -e . #项目目录下pip install -e .
+```
 
 ### 2. 完善数据处理 (`process_data.sh`)
 
@@ -165,7 +199,15 @@ from XPolicyLab.utils.process_data import get_robot_action_dim_info, decode_imag
 - `decode_image_bit`: 将数据中的字节流解析还原为 NumPy 数组（支持单帧图片字节流及整条轨迹的字节流输入）。
 - `get_robot_action_dim_info`: 输入 `env_cfg` 的名称（注意是字符串，不是字典），返回包含 `arm_dim` 和 `ee_dim` 列表的字典。
 
+训练与部署中的图像处理应保持一致。要求分辨率统一为`320x240`
+可参考 `policy/DP/diffusion_policy/process_data.py` 会将图像 resize 为 `320x240`，对应 HWC shape 为 `(240, 320, 3)`。
+
+特别注意 BGR/RGB 通道顺序，请喂给模型 RGB 图像。
+
 **维度信息示例：**
+
+`env_cfg/robot/_robot_info.json`中有不同机器人的维度信息，可同过传入的`{env_cfg_type}`进行索引。
+
 当列表长度为 1 时代表单臂机器人，长度为 2 时代表双臂机器人。在编写模型架构、定义输入输出以及处理数据时，请尽量利用此信息，以兼容未来不同自由度的末端执行器和机械臂任务。
 
 ```json
@@ -181,15 +223,21 @@ from XPolicyLab.utils.process_data import get_robot_action_dim_info, decode_imag
 }
 ```
 
+转换后数据默认保存在 `XPolicyLab/policy/${policy_name}/data`下。
+
 ### 3. 训练模型
 
-完善 `train.sh` 脚本。我们提供了一些演示参数，您可以根据实际需求进行调整。
+完善 `train.sh` 脚本。我们提供了一些演示参数。
+
+`train.sh`中包含`seed`参数，后续会进行不同`seed`的训练及测评，部分`policy`的源代码可能会把`seed`写死，需要注意且进行适配。
+
+训练权重默认保存在 `XPolicyLab/policy/${policy_name}/checkpoints`下。
 
 ### 4. 评测与部署
 
 要支持评测，需要完善两个核心部分：模型推理支持 (`model.py`) 和控制流程 (`deploy.py`)。
 
-我们提供了一个离线调试方案，默认环境为 `debug_policy_env.py`。该调试器会提供尺寸正确的观测数据（Observation），并根据返回的动作（Action）进行检查和模拟交互。调试通过后，即可尝试在仿真环境中运行。
+我们提供了一个离线调试方案，默认环境为 `debug_policy_env.py`。该调试器会提供尺寸正确的观测数据（Observation），并根据返回的动作（Action）进行检查和模拟交互。调试通过后，即可尝试在仿真环境中运行。这个离线环境可通过将`deploy.yml`的`eval_env`设为`debug`来启动。具体实现可参考`XPolicyLab/policy/DP/eval.sh`及其 Python 文件。
 
 #### 完善 `model.Model`
 
@@ -204,10 +252,13 @@ from XPolicyLab.utils.process_data import get_robot_action_dim_info, decode_imag
 
 > 详细实现可直接参考 `demo_policy/model.py` 中的代码及注释。
 
+对`update_obs`和`update_obs_batch`的实现。若已实现了`update_obs_batch`，可以参考`DP`的形式直接实现`update_obs`。如果`update_obs_batch`在某个`policy`较难实现，可直接使用`for`循环`update_obs`。
+
+
 #### 配置 `deploy.yml` 与 `eval.sh`
 
 - **`deploy.yml`**: 指定模型部署所需的参数。部分参数可定义为 `null`，随后在 `eval.sh` 中进行覆盖。
-- **`eval.sh`**: 部署时分为模型进程和环境进程，分别使用 `policy_conda_env` 和 `eval_env_conda_env`。两者通过 `FREE_PORT` 进行通信，从而隔离环境配置。
+- **`eval.sh`**: 部署时分为模型进程和环境进程，分别使用 `policy_conda_env/policy_uv_env_path` 和 `eval_env_conda_env`。两者通过 `FREE_PORT` 进行通信，从而隔离环境配置。对`policy_conda_env`的实现可参考 DP ,对 `policy_uv_env_path`的实现可参考 PI_05。
 
 您只需修改脚本开头的参数定义，并在启动 Server 部分添加 `overrides` 参数以覆盖 `deploy.yml` 中的配置：
 
