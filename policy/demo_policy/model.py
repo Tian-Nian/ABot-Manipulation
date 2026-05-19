@@ -43,7 +43,7 @@ class Model(ModelTemplate):
             ee_keys = ["ee_joint_state"]
 
         elif num_arms == 2:  # 双臂
-            arm_keys = ["left_aQrm_joint_state", "right_arm_joint_state"] if self.action_type == "joint" else ["left_ee_pose", "right_ee_pose"]
+            arm_keys = ["left_arm_joint_state", "right_arm_joint_state"] if self.action_type == "joint" else ["left_ee_pose", "right_ee_pose"]
             ee_keys = ["left_ee_joint_state", "right_ee_joint_state"]
 
         else:
