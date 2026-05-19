@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import importlib.util
 import json
-import sys
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import cv2
 import numpy as np
@@ -12,18 +12,25 @@ import torch
 from scipy.spatial.transform import Rotation
 
 from XPolicyLab.model_template import ModelTemplate
+from XPolicyLab.policy.Spirit_v15.spirit_v15.model import SpiritVLAPolicy
 
-_POLICY_DIR = Path(__file__).resolve().parent
-if str(_POLICY_DIR) not in sys.path:
-    sys.path.insert(0, str(_POLICY_DIR))
-
-from spirit_v15.model import SpiritVLAPolicy
-from spirit_v15.robochallenge.runner.executor import _post_process_action
-from spirit_v15.robochallenge.runner.task_info import (
-    TASK_INFO,
-    TASKS_USE_LESS_CHUNK_SIZE,
-    TASTS_APPLY_GRIPPER_BINARIZATION,
+_TASK_INFO_MODULE_PATH = (
+    Path(__file__).resolve().parent
+    / "spirit_v15"
+    / "robochallenge"
+    / "runner"
+    / "task_info.py"
 )
+
+_TASK_INFO_SPEC = importlib.util.spec_from_file_location("spirit_v15_task_info", _TASK_INFO_MODULE_PATH)
+if _TASK_INFO_SPEC is None or _TASK_INFO_SPEC.loader is None:
+    raise ImportError(f"Failed to load Spirit task info module from {_TASK_INFO_MODULE_PATH}")
+_TASK_INFO_MODULE = importlib.util.module_from_spec(_TASK_INFO_SPEC)
+_TASK_INFO_SPEC.loader.exec_module(_TASK_INFO_MODULE)
+
+TASK_INFO = _TASK_INFO_MODULE.TASK_INFO
+TASKS_USE_LESS_CHUNK_SIZE = _TASK_INFO_MODULE.TASKS_USE_LESS_CHUNK_SIZE
+TASTS_APPLY_GRIPPER_BINARIZATION = _TASK_INFO_MODULE.TASTS_APPLY_GRIPPER_BINARIZATION
 
 
 TASK_NAME_ALIASES = {
@@ -138,6 +145,102 @@ def _to_scalar_gripper(value: Any) -> float:
     return float(array[0])
 
 
+def _post_process_action(
+    action_np: np.ndarray,
+    state_np: np.ndarray,
+    robot_type: str,
+    used_chunk_size: int,
+    raw_embodiment_stats: dict[str, Any] | None,
+    binarization_threshold: Optional[float] = None,
+) -> list[list[float]]:
+    result_list = []
+    if raw_embodiment_stats is not None:
+        left_gripper_min, left_gripper_max = (
+            raw_embodiment_stats[robot_type]["action"]["min"][6],
+            raw_embodiment_stats[robot_type]["action"]["max"][6],
+        )
+        right_gripper_min, right_gripper_max = (
+            raw_embodiment_stats[robot_type]["action"]["min"][13],
+            raw_embodiment_stats[robot_type]["action"]["max"][13],
+        )
+    eps = 1e-8
+
+    for index in range(min(action_np.shape[0], used_chunk_size)):
+        action_item = action_np[index]
+
+        if robot_type == "ARX5":
+            target_xyz = action_item[:3] + state_np[:3]
+            target_rot = (Rotation.from_rotvec(action_item[3:6]) * Rotation.from_rotvec(state_np[3:6])).as_rotvec()
+            target_euler = Rotation.from_rotvec(target_rot).as_euler("xyz", degrees=False)
+            target_gripper = action_item[6].item()
+            if raw_embodiment_stats is not None:
+                target_gripper = target_gripper / 0.1 * (left_gripper_max - left_gripper_min + eps) + left_gripper_min
+
+            result_list.append(target_xyz.tolist() + target_euler.tolist() + [target_gripper])
+            continue
+
+        if robot_type == "UR5":
+            target_joint = action_item[:6] + state_np[:6]
+            target_gripper = 0.1 - action_item[6].item()
+            if raw_embodiment_stats is not None:
+                target_gripper = target_gripper / 0.1 * (left_gripper_max - left_gripper_min + eps) + left_gripper_min
+            else:
+                target_gripper = target_gripper / 0.1 * 255
+
+            result_list.append(target_joint.tolist() + [target_gripper])
+            continue
+
+        if robot_type == "Franka":
+            target_xyz = action_item[:3] + state_np[:3]
+            target_rot = (Rotation.from_rotvec(action_item[3:6]) * Rotation.from_rotvec(state_np[3:6])).as_rotvec()
+            target_quat = Rotation.from_rotvec(target_rot).as_quat()
+            target_gripper = action_item[6].item()
+            if raw_embodiment_stats is not None:
+                target_gripper = target_gripper / 0.1 * (left_gripper_max - left_gripper_min + eps) + left_gripper_min
+
+            result_list.append(target_xyz.tolist() + target_quat.tolist() + [target_gripper])
+            continue
+
+        if robot_type == "aloha":
+            target_left_xyz = action_item[:3] + state_np[:3]
+            target_left_rot = (Rotation.from_rotvec(action_item[3:6]) * Rotation.from_rotvec(state_np[3:6])).as_rotvec()
+            target_left_quat = Rotation.from_rotvec(target_left_rot).as_quat()
+            target_left_gripper = action_item[6].item()
+            if raw_embodiment_stats is not None:
+                target_left_gripper = (
+                    target_left_gripper / 0.1 * (left_gripper_max - left_gripper_min + eps) + left_gripper_min
+                )
+            if binarization_threshold is not None:
+                target_left_gripper = left_gripper_max if target_left_gripper > binarization_threshold else left_gripper_min
+
+            target_right_xyz = action_item[7:10] + state_np[7:10]
+            target_right_rot = (
+                Rotation.from_rotvec(action_item[10:13]) * Rotation.from_rotvec(state_np[10:13])
+            ).as_rotvec()
+            target_right_quat = Rotation.from_rotvec(target_right_rot).as_quat()
+            target_right_gripper = action_item[13].item()
+            if raw_embodiment_stats is not None:
+                target_right_gripper = (
+                    target_right_gripper / 0.1 * (right_gripper_max - right_gripper_min + eps) + right_gripper_min
+                )
+            if binarization_threshold is not None:
+                target_right_gripper = right_gripper_max if target_right_gripper > binarization_threshold else right_gripper_min
+
+            result_list.append(
+                target_left_xyz.tolist()
+                + target_left_quat.tolist()
+                + [target_left_gripper]
+                + target_right_xyz.tolist()
+                + target_right_quat.tolist()
+                + [target_right_gripper]
+            )
+            continue
+
+        raise ValueError(f"Unsupported robot_type: {robot_type}")
+
+    return result_list
+
+
 class Model(ModelTemplate):
     def __init__(self, model_cfg: dict[str, Any]):
         self.model_cfg = dict(model_cfg)
@@ -147,9 +250,14 @@ class Model(ModelTemplate):
         if checkpoint_path is None:
             raise ValueError("checkpoint_path or model_path is required for Spirit_v15.")
 
+        self.default_task_name = None
+        self.fallback_task_name = self._resolve_known_task_name(
+            self.model_cfg.get("fallback_task_name") or "stack_bowls"
+        )
+        self.force_default_task_name = bool(self.model_cfg.get("force_default_task_name", True))
         task_name = self.model_cfg.get("task_name")
-        self.default_task_name = self._resolve_task_name(task_name) if task_name else None
-        self.default_prompt = self.model_cfg.get("prompt", self.default_task_name or task_name)
+        self.default_task_name = self._resolve_task_name(task_name)
+        self.default_prompt = self.model_cfg.get("prompt", TASK_INFO[self.default_task_name]["task"])
         self.used_chunk_size = int(self.model_cfg.get("used_chunk_size", 60))
         self.raw_embodiment_stats = None
 
@@ -159,6 +267,7 @@ class Model(ModelTemplate):
                 self.raw_embodiment_stats = json.load(file)
 
         self.policy = SpiritVLAPolicy.from_pretrained(checkpoint_path)
+        self._assert_norm_stats_loaded()
         self.policy.to(self.device)
         self.policy.eval()
         self.model = self.policy
@@ -173,6 +282,18 @@ class Model(ModelTemplate):
         if requested.type == "cuda" and not torch.cuda.is_available():
             return torch.device("cpu")
         return requested
+
+    def _assert_norm_stats_loaded(self):
+        required_buffers = {
+            "normalize_inputs.buffer_observation_state": self.policy.normalize_inputs.buffer_observation_state,
+            "normalize_targets.buffer_action": self.policy.normalize_targets.buffer_action,
+            "unnormalize_outputs.buffer_action": self.policy.unnormalize_outputs.buffer_action,
+        }
+        for name, buffer in required_buffers.items():
+            if torch.isinf(buffer["min"]).any() or torch.isinf(buffer["max"]).any():
+                raise RuntimeError(
+                    f"Spirit_v15 norm stats not loaded for {name}; checkpoint is missing normalization buffers or load_state_dict did not restore them."
+                )
 
     def update_obs(self, obs):
         self.update_obs_batch([obs])
@@ -199,6 +320,7 @@ class Model(ModelTemplate):
                 instruction=resolve_prompt(observation, self.default_prompt),
                 task_name=observation.get("task_name"),
             )
+            print(f"Infer result: {result}")
             action_list.append(
                 self._decode_action_chunk(
                     result["actions"],
@@ -253,15 +375,26 @@ class Model(ModelTemplate):
             "instruction": instruction,
         }
 
+    def _resolve_known_task_name(self, task_name: str | None) -> str | None:
+        if not task_name:
+            return None
+        if task_name in TASK_INFO:
+            return task_name
+        alias = TASK_NAME_ALIASES.get(task_name)
+        if alias in TASK_INFO:
+            return alias
+        return None
+
     def _resolve_task_name(self, task_name: str | None) -> str:
-        for candidate in (task_name, self.default_task_name):
+        if self.force_default_task_name and self.fallback_task_name is not None:
+            return self.fallback_task_name
+
+        for candidate in (task_name, self.default_task_name, self.fallback_task_name):
             if not candidate:
                 continue
-            if candidate in TASK_INFO:
-                return candidate
-            alias = TASK_NAME_ALIASES.get(candidate)
-            if alias in TASK_INFO:
-                return alias
+            resolved = self._resolve_known_task_name(candidate)
+            if resolved is not None:
+                return resolved
         available = ", ".join(sorted(TASK_INFO.keys()))
         raise KeyError(f"unsupported Spirit task name: {task_name!r}; available tasks: {available}")
 
@@ -378,6 +511,15 @@ class Model(ModelTemplate):
 
     def _extract_internal_state(self, observation: dict[str, Any], robot_type: str) -> torch.Tensor:
         endpose = observation.get("endpose") or {}
+        if robot_type == "ARX5":
+            if "joint_action" in observation and "vector" in observation["joint_action"]:
+                return self._robotwin_joint_state_to_internal(
+                    np.asarray(observation["joint_action"]["vector"], dtype=np.float32),
+                    robot_type,
+                )
+            if "action" in observation:
+                return self._robotwin_joint_state_to_internal(np.asarray(observation["action"], dtype=np.float32), robot_type)
+
         if robot_type == "aloha":
             if all(key in endpose for key in ("left_endpose", "left_gripper", "right_endpose", "right_gripper")):
                 return self._dual_ee_to_internal_state(

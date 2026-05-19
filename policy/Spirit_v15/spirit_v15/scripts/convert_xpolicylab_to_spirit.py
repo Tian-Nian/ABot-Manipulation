@@ -215,7 +215,7 @@ def _ensure_utf8_strings(value) -> List[str]:
 
 
 def _choose_instruction(data: dict, fallback: str) -> str:
-    candidates = _ensure_utf8_strings(_get_nested(data, "instruction"))
+    candidates = _ensure_utf8_strings(_get_nested(data, "instructions"))
     candidates = [item for item in candidates if item]
     if candidates:
         return random.choice(candidates)

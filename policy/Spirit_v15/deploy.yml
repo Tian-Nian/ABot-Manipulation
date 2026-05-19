@@ -6,12 +6,14 @@ expert_data_num: null
 action_type: null
 seed: 0
 eval_batch: false
-eval_env: sim
+eval_env: debug
 
 # Spirit_v15-specific arguments
 checkpoint_path: null
 model_path: null
 prompt: null
+fallback_task_name: stack_bowls
+force_default_task_name: true
 device: auto
 used_chunk_size: 60
 raw_embodiment_stats_json_path: null

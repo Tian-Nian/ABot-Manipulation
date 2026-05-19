@@ -32,7 +32,7 @@ from transformers import (
     PretrainedConfig,
 )
 
-from utils import (
+from ..utils import (
     FeatureType,
     NormalizationMode,
     PolicyFeature,

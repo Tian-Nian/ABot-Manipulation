@@ -30,7 +30,7 @@ def eval_one_episode(TASK_ENV, model_client):
         obs = _get_valid_obs(TASK_ENV)
         model_client.call(func_name="update_obs", obs=obs)
         actions = model_client.call(func_name="get_action")
-
+        print(f"Actions: {actions}")
         for action_idx, action in enumerate(actions):
             TASK_ENV.take_action(action)
 

@@ -116,10 +116,10 @@ prepare_xpolicylab_dataset.sh \
 ```bash
 bash scripts/prepare_xpolicylab_dataset.sh \
   /vepfs-cnbje63de6fae220/niantian/RoboDojo_env/data \
-  RoboDojo.*.arx_x5 \
-  /vepfs-cnbje63de6fae220/xspark_shared/spirit_datasets/RoboDojo_sim_100/ \
-  sim_100 \
-  "Do your job." \
+  RoboDojo.stack_bowls.arx_x5 \
+  /vepfs-cnbje63de6fae220/xspark_shared/spirit_datasets/stack_bowls_arx_x5 \
+  stack_bowls \
+  "stack bowls with both arms" \
   auto \
   1 \
   20 \
