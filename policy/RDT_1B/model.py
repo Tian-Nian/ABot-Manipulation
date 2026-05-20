@@ -23,8 +23,8 @@ for _path in (str(_REPO_ROOT), str(_CUR_DIR), str(_RDT_ROOT), str(_RDT_ROOT / "m
 from XPolicyLab.model_template import ModelTemplate
 from XPolicyLab.utils.process_data import get_robot_action_dim_info, unpack_robot_state
 
-from scripts.agilex_model import create_model
-from models.multimodal_encoder.t5_encoder import T5Embedder
+from .rdt.scripts.agilex_model import create_model
+from .rdt.models.multimodal_encoder.t5_encoder import T5Embedder
 
 
 def extract_image(observation, candidate_names):
@@ -74,23 +74,13 @@ def decode_compressed_image(image_buffer):
 
 
 def encode_obs(observation, default_prompt):
-    if "images" in observation and "state" in observation:
-        images = {
-            "cam_high": ensure_hwc_uint8(observation["images"]["cam_high"]),
-            "cam_right_wrist": ensure_hwc_uint8(observation["images"]["cam_right_wrist"]),
-            "cam_left_wrist": ensure_hwc_uint8(observation["images"]["cam_left_wrist"]),
-        }
-        state = np.asarray(observation["state"], dtype=np.float32)
-        prompt = observation.get("prompt", default_prompt)
-        return {"images": images, "state": state, "prompt": prompt}
-
     images = {
-        "cam_high": ensure_hwc_uint8(extract_image(observation, ["cam_high", "cam_head", "head_camera", "top_camera"])),
+        "cam_high": ensure_hwc_uint8(extract_image(observation, ["cam_head"])),
         "cam_right_wrist": ensure_hwc_uint8(
-            extract_image(observation, ["cam_right_wrist", "right_camera", "right_wrist", "wrist_right"])
+            extract_image(observation, ["cam_right_wrist"])
         ),
         "cam_left_wrist": ensure_hwc_uint8(
-            extract_image(observation, ["cam_left_wrist", "left_camera", "left_wrist", "wrist_left"])
+            extract_image(observation, ["cam_left_wrist"])
         ),
     }
 
@@ -104,7 +94,7 @@ def encode_obs(observation, default_prompt):
         ],
         axis=-1,
     )
-    prompt = observation.get("prompt", default_prompt)
+    prompt = observation.get("instruction", default_prompt)
     return {"images": images, "state": state, "prompt": prompt}
 
 
@@ -116,8 +106,8 @@ class Model(ModelTemplate):
         if self.action_type != "joint":
             raise ValueError("RDT-1b in XPolicyLab currently supports only action_type='joint'.")
 
-        env_cfg = self.model_cfg.get("env_cfg") or self.model_cfg.get("env_cfg_type")
-        self.robot_action_dim_info = get_robot_action_dim_info(env_cfg) if env_cfg is not None else None
+        self.env_cfg = self.model_cfg.get("env_cfg") or self.model_cfg.get("env_cfg_type")
+        self.robot_action_dim_info = get_robot_action_dim_info(self.env_cfg) if self.env_cfg is not None else None
         self.default_prompt = self.model_cfg.get("prompt", self.task_name)
 
         self.device = self._get_device(self.model_cfg.get("device", "cuda"))
@@ -145,10 +135,16 @@ class Model(ModelTemplate):
         return torch.device(device_arg)
 
     def _build_runtime_config(self):
-        if self.robot_action_dim_info is None or len(self.robot_action_dim_info["arm_dim"]) != 2:
-            raise ValueError("RDT-1b expects a dual-arm env_cfg with joint-state dimensions.")
+        if self.robot_action_dim_info is None:
+            raise ValueError("RDT-1b requires env_cfg or env_cfg_type so action dimensions can be resolved.")
 
-        left_arm_dim, right_arm_dim = self.robot_action_dim_info["arm_dim"]
+        arm_dim = self.robot_action_dim_info.get("arm_dim")
+        if arm_dim is None or len(arm_dim) != 2:
+            raise ValueError(
+                f"RDT-1b expects a dual-arm env_cfg with joint-state dimensions, got env_cfg={self.env_cfg!r}, arm_dim={arm_dim!r}."
+            )
+
+        left_arm_dim, right_arm_dim = arm_dim
         return {
             "episode_len": int(self.model_cfg.get("episode_len", 10000)),
             "state_dim": int(left_arm_dim + 1 + right_arm_dim + 1),
@@ -157,16 +153,15 @@ class Model(ModelTemplate):
         }
 
     def _default_model_paths(self):
-        model_root = self.model_cfg.get("model_root")
-        if model_root is None:
-            model_root = str(_RDT_ROOT)
+        model_root = self.model_cfg.get("model_root") or str(_RDT_ROOT)
+        default_config_path = os.path.join(model_root, "configs/base.yaml")
+        default_text_encoder_path = os.path.join(model_root, "weights/RDT/t5-v1_1-xxl")
+        default_vision_encoder_path = os.path.join(model_root, "weights/RDT/siglip-so400m-patch14-384")
 
         return {
-            "config_path": self.model_cfg.get("config_path", os.path.join(model_root, "configs/base.yaml")),
-            "text_encoder_path": self.model_cfg.get("text_encoder_path", os.path.join(model_root, "weights/RDT/t5-v1_1-xxl")),
-            "vision_encoder_path": self.model_cfg.get(
-                "vision_encoder_path", os.path.join(model_root, "weights/RDT/siglip-so400m-patch14-384")
-            ),
+            "config_path": self.model_cfg.get("config_path") or default_config_path,
+            "text_encoder_path": self.model_cfg.get("text_encoder_path") or default_text_encoder_path,
+            "vision_encoder_path": self.model_cfg.get("vision_encoder_path") or default_vision_encoder_path,
             "checkpoint_path": self.model_cfg.get("checkpoint_path") or self.model_cfg.get("model_path"),
         }
 

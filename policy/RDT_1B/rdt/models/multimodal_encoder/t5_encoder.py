@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import torch
 from transformers import AutoTokenizer, T5EncoderModel
 
@@ -70,7 +72,17 @@ class T5Embedder:
         self.use_text_preprocessing = use_text_preprocessing
         self.hf_token = hf_token
 
-        assert from_pretrained in self.available_models
+        from_pretrained_path = Path(from_pretrained).expanduser() if from_pretrained is not None else None
+        is_local_path = from_pretrained_path is not None and from_pretrained_path.exists()
+        if not is_local_path and from_pretrained not in self.available_models:
+            raise ValueError(
+                f"Unsupported T5 checkpoint {from_pretrained!r}. Expected one of {self.available_models} or an existing local path."
+            )
+
+        if is_local_path:
+            from_pretrained = str(from_pretrained_path)
+            local_files_only = True
+
         self.tokenizer = AutoTokenizer.from_pretrained(
             from_pretrained,
             model_max_length=model_max_length,
