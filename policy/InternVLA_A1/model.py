@@ -297,21 +297,28 @@ class Model(ModelTemplate):
         self.head_history = []
         self.left_history = []
         self.right_history = []
+        self._histories_by_env: dict[int, tuple[list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]]] = {}
+        self._latest_obs_by_env: dict[int, dict[str, Any]] = {}
         self._latest_obs = None
         self._latest_env_idx_list = [0]
 
     def _to_image_tensor(self, image):
         return torch.as_tensor(image, device=self.device).contiguous().to(self.dtype) / 255.0
 
-    def _append_history(self, encoded_obs):
-        self.head_history.append(self._to_image_tensor(encoded_obs["images"]["cam_high"]))
-        self.left_history.append(self._to_image_tensor(encoded_obs["images"]["cam_left_wrist"]))
-        self.right_history.append(self._to_image_tensor(encoded_obs["images"]["cam_right_wrist"]))
+    def _append_history(self, encoded_obs, histories=None):
+        head_history, left_history, right_history = histories or (
+            self.head_history,
+            self.left_history,
+            self.right_history,
+        )
+        head_history.append(self._to_image_tensor(encoded_obs["images"]["cam_high"]))
+        left_history.append(self._to_image_tensor(encoded_obs["images"]["cam_left_wrist"]))
+        right_history.append(self._to_image_tensor(encoded_obs["images"]["cam_right_wrist"]))
         max_history = self.image_history_interval + 1
-        while len(self.head_history) > max_history:
-            self.head_history.pop(0)
-            self.left_history.pop(0)
-            self.right_history.pop(0)
+        while len(head_history) > max_history:
+            head_history.pop(0)
+            left_history.pop(0)
+            right_history.pop(0)
 
     def _build_image_pair(self, history):
         past_idx = max(len(history) - self.image_history_interval - 1, 0)
@@ -325,25 +332,32 @@ class Model(ModelTemplate):
         encoded_obs_list = [
             encode_obs(obs, self.action_type, self.robot_action_dim_info, self.default_prompt) for obs in obs_list
         ]
-        if len(encoded_obs_list) != 1:
-            raise NotImplementedError("InternVLA-A1 currently supports single-env inference in XPolicyLab.")
         self._latest_obs = encoded_obs_list[0]
-        self._append_history(self._latest_obs)
+        for env_idx, encoded_obs in zip(self._latest_env_idx_list, encoded_obs_list):
+            histories = self._histories_by_env.setdefault(env_idx, ([], [], []))
+            self._latest_obs_by_env[env_idx] = encoded_obs
+            self._append_history(encoded_obs, histories)
 
     @torch.inference_mode()
-    def infer(self):
-        if self._latest_obs is None:
+    def infer(self, env_idx=None):
+        latest_obs = self._latest_obs if env_idx is None else self._latest_obs_by_env.get(env_idx)
+        if latest_obs is None:
             raise AssertionError("update_obs must be called before get_action.")
+        head_history, left_history, right_history = (
+            (self.head_history, self.left_history, self.right_history)
+            if env_idx is None
+            else self._histories_by_env[env_idx]
+        )
 
-        state = torch.from_numpy(self._latest_obs["state"]).float().to(self.device)
+        state = torch.from_numpy(latest_obs["state"]).float().to(self.device)
         init_action = state.unsqueeze(0).clone()
 
         sample = {
-            f"{OBS_IMAGES}.image0": self._build_image_pair(self.head_history),
-            f"{OBS_IMAGES}.image1": self._build_image_pair(self.left_history),
-            f"{OBS_IMAGES}.image2": self._build_image_pair(self.right_history),
+            f"{OBS_IMAGES}.image0": self._build_image_pair(head_history),
+            f"{OBS_IMAGES}.image1": self._build_image_pair(left_history),
+            f"{OBS_IMAGES}.image2": self._build_image_pair(right_history),
             "observation.state": state,
-            "task": self._latest_obs["prompt"],
+            "task": latest_obs["prompt"],
         }
         for key in list(sample.keys()):
             if OBS_IMAGES in key and "mask" not in key:
@@ -368,7 +382,7 @@ class Model(ModelTemplate):
         )
 
         action_pred, _ = self.policy.predict_action_chunk(inputs, decode_image=self.decode_image_flag)
-        action_pred = action_pred[0, : self.infer_horizon, : self._latest_obs["state"].shape[0]]
+        action_pred = action_pred[0, : self.infer_horizon, : latest_obs["state"].shape[0]]
         action_pred = self.unnormalize_fn({"action": action_pred})["action"]
 
         if self.action_mode == "delta":
@@ -386,8 +400,8 @@ class Model(ModelTemplate):
 
     def get_action_batch(self, env_idx_list=None, **kwargs):
         env_idx_list = env_idx_list or self._latest_env_idx_list
-        if len(env_idx_list) != 1:
-            raise NotImplementedError("InternVLA-A1 currently supports single-env inference in XPolicyLab.")
-
-        raw_actions = self.infer()
-        return [unpack_robot_state(raw_actions, self.action_type, self.robot_action_dim_info, source_type="obs")]
+        action_list = []
+        for env_idx in env_idx_list:
+            raw_actions = self.infer(env_idx)
+            action_list.append(unpack_robot_state(raw_actions, self.action_type, self.robot_action_dim_info, source_type="obs"))
+        return action_list

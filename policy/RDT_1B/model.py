@@ -142,6 +142,8 @@ class Model(ModelTemplate):
 
         self.tokenizer, self.text_encoder = self._load_text_embedder()
         self.observation_window = None
+        self._observation_windows: dict[int, deque] = {}
+        self._latest_encoded_obs_list = []
         self.lang_embeddings = None
         self._latest_env_idx_list: list[int] = [0]
         self.model = self.policy
@@ -335,59 +337,59 @@ class Model(ModelTemplate):
 
     def update_obs_batch(self, obs_list):
         self._latest_env_idx_list = [obs.get("env_idx", index) for index, obs in enumerate(obs_list)]
-        encoded_obs_list = [encode_obs(obs, self.default_prompt) for obs in obs_list]
+        self._latest_encoded_obs_list = [encode_obs(obs, self.default_prompt) for obs in obs_list]
+        if self.lang_embeddings is None:
+            self._set_language_instruction(self._latest_encoded_obs_list[0]["prompt"])
 
-        if len(encoded_obs_list) != 1:
-            raise NotImplementedError("RDT-1b currently supports single-env inference in XPolicyLab.")
+        for env_idx, encoded_obs in zip(self._latest_env_idx_list, self._latest_encoded_obs_list):
+            window = self._observation_windows.get(env_idx)
+            if window is None:
+                window = deque(maxlen=2)
+                window.append(
+                    {
+                        "qpos": None,
+                        "images": {
+                            self.config["camera_names"][0]: None,
+                            self.config["camera_names"][1]: None,
+                            self.config["camera_names"][2]: None,
+                        },
+                    }
+                )
+                self._observation_windows[env_idx] = window
 
-        encoded_obs = encoded_obs_list[0]
-        if self.observation_window is None:
-            self.observation_window = deque(maxlen=2)
-            self.observation_window.append(
+            img_front = self._jpeg_mapping(self._resize_img(encoded_obs["images"]["cam_high"]))
+            img_right = self._jpeg_mapping(self._resize_img(encoded_obs["images"]["cam_right_wrist"]))
+            img_left = self._jpeg_mapping(self._resize_img(encoded_obs["images"]["cam_left_wrist"]))
+            qpos = torch.from_numpy(np.asarray(encoded_obs["state"], dtype=np.float32)).float().to(self.device)
+
+            window.append(
                 {
-                    "qpos": None,
+                    "qpos": qpos,
                     "images": {
-                        self.config["camera_names"][0]: None,
-                        self.config["camera_names"][1]: None,
-                        self.config["camera_names"][2]: None,
+                        self.config["camera_names"][0]: img_front,
+                        self.config["camera_names"][1]: img_right,
+                        self.config["camera_names"][2]: img_left,
                     },
                 }
             )
-
-        if self.lang_embeddings is None:
-            self._set_language_instruction(encoded_obs["prompt"])
-
-        img_front = self._jpeg_mapping(self._resize_img(encoded_obs["images"]["cam_high"]))
-        img_right = self._jpeg_mapping(self._resize_img(encoded_obs["images"]["cam_right_wrist"]))
-        img_left = self._jpeg_mapping(self._resize_img(encoded_obs["images"]["cam_left_wrist"]))
-        qpos = torch.from_numpy(np.asarray(encoded_obs["state"], dtype=np.float32)).float().to(self.device)
-
-        self.observation_window.append(
-            {
-                "qpos": qpos,
-                "images": {
-                    self.config["camera_names"][0]: img_front,
-                    self.config["camera_names"][1]: img_right,
-                    self.config["camera_names"][2]: img_left,
-                },
-            }
-        )
+        self.observation_window = self._observation_windows[self._latest_env_idx_list[0]]
 
     @torch.inference_mode()
-    def infer(self):
-        if self.observation_window is None or self.lang_embeddings is None:
+    def infer(self, observation_window=None):
+        observation_window = observation_window or self.observation_window
+        if observation_window is None or self.lang_embeddings is None:
             raise AssertionError("update_obs must be called before get_action.")
 
         image_arrs = [
-            self.observation_window[-2]["images"][self.config["camera_names"][0]],
-            self.observation_window[-2]["images"][self.config["camera_names"][1]],
-            self.observation_window[-2]["images"][self.config["camera_names"][2]],
-            self.observation_window[-1]["images"][self.config["camera_names"][0]],
-            self.observation_window[-1]["images"][self.config["camera_names"][1]],
-            self.observation_window[-1]["images"][self.config["camera_names"][2]],
+            observation_window[-2]["images"][self.config["camera_names"][0]],
+            observation_window[-2]["images"][self.config["camera_names"][1]],
+            observation_window[-2]["images"][self.config["camera_names"][2]],
+            observation_window[-1]["images"][self.config["camera_names"][0]],
+            observation_window[-1]["images"][self.config["camera_names"][1]],
+            observation_window[-1]["images"][self.config["camera_names"][2]],
         ]
         images = [PImage.fromarray(arr) if arr is not None else None for arr in image_arrs]
-        proprio = self.observation_window[-1]["qpos"].unsqueeze(0)
+        proprio = observation_window[-1]["qpos"].unsqueeze(0)
         actions = self.policy.step(proprio=proprio, images=images, text_embeds=self.lang_embeddings)
         return actions.squeeze(0).float().cpu().numpy()
 
@@ -397,13 +399,15 @@ class Model(ModelTemplate):
 
     def get_action_batch(self, env_idx_list=None, **kwargs):
         env_idx_list = env_idx_list or self._latest_env_idx_list
-        if len(env_idx_list) != 1:
-            raise NotImplementedError("RDT-1b currently supports single-env inference in XPolicyLab.")
-
-        raw_actions = self.infer()
-        return [unpack_robot_state(raw_actions, self.action_type, self.robot_action_dim_info, source_type="obs")]
+        action_list = []
+        for env_idx in env_idx_list:
+            raw_actions = self.infer(self._observation_windows[env_idx])
+            action_list.append(unpack_robot_state(raw_actions, self.action_type, self.robot_action_dim_info, source_type="obs"))
+        return action_list
 
     def reset(self):
         self.lang_embeddings = None
         self.observation_window = None
+        self._observation_windows = {}
+        self._latest_encoded_obs_list = []
         self._latest_env_idx_list = [0]

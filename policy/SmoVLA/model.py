@@ -168,6 +168,7 @@ class Model(ModelTemplate):
         self.preprocessor, self.postprocessor = self._build_processors()
         self._latest_env_idx_list = [0]
         self._latest_payload = None
+        self._latest_payloads: dict[int, dict[str, Any]] = {}
         self._lerobot_features = None
         self.model = self.policy
 
@@ -316,14 +317,16 @@ class Model(ModelTemplate):
         encoded_obs_list = [
             encode_obs(obs, self.action_type, self.robot_action_dim_info, self.default_prompt) for obs in obs_list
         ]
-        if len(encoded_obs_list) != 1:
-            raise NotImplementedError("SmoVLA currently supports single-env inference in XPolicyLab.")
         self._latest_payload = encoded_obs_list[0]
         self._ensure_lerobot_features(self._latest_payload)
+        self._latest_payloads = {
+            env_idx: payload for env_idx, payload in zip(self._latest_env_idx_list, encoded_obs_list)
+        }
 
     @torch.inference_mode()
-    def infer(self):
-        if self._latest_payload is None:
+    def infer(self, payload=None):
+        payload = payload or self._latest_payload
+        if payload is None:
             raise AssertionError("update_obs must be called before get_action.")
 
         observation = raw_observation_to_observation(
@@ -351,17 +354,18 @@ class Model(ModelTemplate):
 
     def get_action_batch(self, env_idx_list=None, **kwargs):
         env_idx_list = env_idx_list or self._latest_env_idx_list
-        if len(env_idx_list) != 1:
-            raise NotImplementedError("SmoVLA currently supports single-env inference in XPolicyLab.")
-
-        raw_actions = self.infer()
-        return [unpack_robot_state(raw_actions, self.action_type, self.robot_action_dim_info, source_type="obs")]
+        action_list = []
+        for env_idx in env_idx_list:
+            raw_actions = self.infer(self._latest_payloads[env_idx])
+            action_list.append(unpack_robot_state(raw_actions, self.action_type, self.robot_action_dim_info, source_type="obs"))
+        return action_list
 
     def reset(self):
         if self.policy is not None:
             self.policy.reset()
         self._latest_env_idx_list = [0]
         self._latest_payload = None
+        self._latest_payloads = {}
         self._lerobot_features = None
 
 
