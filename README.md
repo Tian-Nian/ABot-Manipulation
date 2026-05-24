@@ -181,10 +181,10 @@ bash create_policy.sh ${policy_name}
 
 **常见参数说明：**
 - `dataset_name`: 数据集名称，目的是在data目录下区分不同项目的数据集，例如RoboTwin和RoboDojo。
-- `task_name`: 任务名称。`train.sh` / `process_data.sh` 中代表训练任务（多任务可由各 policy 自行扩展为逗号分隔）；`eval.sh` 中代表仿真器中要跑的任务，传给环境客户端。
-- `ckpt_name`: checkpoint 标识，用来唯一定位训练产物所在的子目录。常见做法是与 `task_name` 同名，**cotrain** 场景可置为 `cotrain` 等任意字符串，以便同一份权重在多个 `task_name` 上评测。
+- `task_name`: 任务名称。`process_data.sh` 中代表训练任务（多任务可由各 policy 自行扩展为逗号分隔）；`eval.sh` 中代表仿真器中要跑的任务，传给环境客户端。
+- `ckpt_name`: checkpoint 标识，用于 `train.sh` 定位数据与训练产物子目录。**cotrain** 场景可置为 `cotrain` 等任意字符串；单任务训练时通常与具体任务名相同。
 - `env_cfg_type`: 采集或评测的环境配置（包含本体信息等）。在 `demo_env/env_cfg_type` 中可以查看示例。教程中提供了两个示范数据：`dual_franka_panda`（双臂夹爪）和 `g1_inspire`（人形灵巧手）。
-- `expert_data_num`: 训练使用的轨迹数量。
+- `expert_data_num`: 训练使用的轨迹数量，参与 checkpoint 6 元组命名，为 `train.sh` 必填参数。
 - `action_type`: 模型使用的数据类型（如 `ee` 或 `joint`）。这会影响使用的数据内容以及模型输入输出的维度。
 - `seed`: 随机种子，便于多种子复现与对比。
 
@@ -193,7 +193,6 @@ bash create_policy.sh ${policy_name}
 >   `<dataset_name>-<task_name>-<env_cfg_type>-<expert_data_num>-<action_type>`，落在 `policy/<policy_name>/data/` 下。
 > - **训练产物子目录**（`train.sh` 输出，对应 DP 的 `ckpt_setting`）固定为 6 元组：
 >   `<dataset_name>-<ckpt_name>-<env_cfg_type>-<expert_data_num>-<action_type>-<seed>`，落在 `policy/<policy_name>/checkpoints/` 下。
->   `train.sh` 没有独立的 `ckpt_name` 时，用 `task_name` 占位即可；
 
 #### 完善 install.sh
 策略创建后，在根据原项目进行环境配置的同时完善install.sh
@@ -269,18 +268,17 @@ from XPolicyLab.utils.process_data import get_robot_action_dim_info, decode_imag
 
 训练权重默认保存在 `XPolicyLab/policy/${policy_name}/checkpoints` 下；子目录名采用上文“命名约定”中的 6 元组 `<dataset_name>-<ckpt_name>-<env_cfg_type>-<expert_data_num>-<action_type>-<seed>`。
 
-`demo_policy/train.sh` 的输入参数（8 个）：
+`demo_policy/train.sh` 的输入参数（7 个）：
 
 | 序号 | 参数 | 含义 |
 |---|---|---|
-| 1 | `dataset_name` | 数据集名称，与 `process_data.sh` 保持一致 |
-| 2 | `task_name` | 训练任务名 |
-| 3 | `ckpt_name` | checkpoint 标识，决定输出子目录名；常规训练令其等于 `task_name`，cotrain 训练可设为 `cotrain` 等 |
-| 4 | `env_cfg_type` | 环境配置 / 本体类型 |
-| 5 | `expert_data_num` | 训练使用的轨迹数量 |
-| 6 | `action_type` | 动作类型 |
-| 7 | `seed` | 随机种子 |
-| 8 | `gpu_id` | 训练所用 GPU id（多卡可写 `0,1,2,3`，由各 policy 自行处理） |
+| 1 | `dataset_name` | 数据集名称，与 `process_data.sh` 保持一致（必填） |
+| 2 | `ckpt_name` | checkpoint 标识，决定数据与输出子目录名；cotrain 训练可设为 `cotrain` 等（必填） |
+| 3 | `env_cfg_type` | 环境配置 / 本体类型（必填） |
+| 4 | `expert_data_num` | 训练使用的轨迹数量，参与 checkpoint 6 元组命名（必填） |
+| 5 | `action_type` | 动作类型（必填） |
+| 6 | `seed` | 随机种子，参与 checkpoint 6 元组命名（必填） |
+| 7 | `gpu_id` | 训练所用 GPU id（多卡可写 `0,1,2,3`，由各 policy 自行处理） |
 
 ### 4. 评测与部署
 
